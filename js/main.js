@@ -10,7 +10,7 @@ let alertaFinal = false;
 let intervaloAposFinal = null;
 let pararLoopBeep = null;
 
-const TEMPO_INTERVALO = 60+1;
+const TEMPO_INTERVALO = 60;
 
 const timer = document.getElementById("timer");
 const horario = document.getElementById("horario");
