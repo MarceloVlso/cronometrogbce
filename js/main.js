@@ -1,15 +1,23 @@
-let tempo = 300;
+let tempoConfigurado = 300;
+let tempo = tempoConfigurado;
+
 let rodando = false;
+let modoAtual = "treino";
+
+let beep10Tocado = false;
 let alertaFinal = false;
 
-const TEMPO_INICIAL = 300;
+let intervaloAposFinal = null;
+let pararLoopBeep = null;
+
+const TEMPO_INTERVALO = 60+1;
 
 const timer = document.getElementById("timer");
 const horario = document.getElementById("horario");
+const modo = document.getElementById("modo");
 const beep = document.getElementById("beep");
 
 function atualizarHorario() {
-
     const agora = new Date();
 
     const horarioBrasil = agora.toLocaleTimeString("pt-BR", {
@@ -19,32 +27,60 @@ function atualizarHorario() {
     horario.innerText = "Horário: " + horarioBrasil;
 }
 
-setInterval(atualizarHorario, 1000);
-
 function formatarTempo(segundos) {
-
     const min = Math.floor(segundos / 60);
     const sec = segundos % 60;
 
-    return String(min).padStart(2, '0') + ':' +
-           String(sec).padStart(2, '0');
+    return String(min).padStart(2, "0") + ":" +
+           String(sec).padStart(2, "0");
 }
 
 function atualizarTela() {
     timer.innerText = formatarTempo(tempo);
+    modo.innerText = modoAtual === "treino" ? "TREINO" : "INTERVALO";
+}
+
+function tocarBeepUmaVez() {
+    try {
+        beep.loop = false;
+        beep.pause();
+        beep.currentTime = 0;
+        beep.play().catch(() => {});
+    } catch (e) {}
+}
+
+function tocarBeepLoopPor3Segundos() {
+    try {
+        beep.loop = true;
+        beep.pause();
+        beep.currentTime = 0;
+        beep.play().catch(() => {});
+
+        clearTimeout(pararLoopBeep);
+
+        pararLoopBeep = setTimeout(() => {
+            beep.pause();
+            beep.loop = false;
+            beep.currentTime = 0;
+        }, 3000);
+
+    } catch (e) {}
+}
+
+function desbloquearAudio() {
+    try {
+        beep.play()
+            .then(() => {
+                beep.pause();
+                beep.currentTime = 0;
+            })
+            .catch(() => {});
+    } catch (e) {}
 }
 
 function ativarAlertaFinal() {
-
-    if (alertaFinal) return;
-
     alertaFinal = true;
     document.body.classList.add("piscando");
-
-    try {
-        beep.currentTime = 0;
-        beep.play();
-    } catch (e) {}
 }
 
 function limparAlertaFinal() {
@@ -52,59 +88,158 @@ function limparAlertaFinal() {
     document.body.classList.remove("piscando");
 }
 
+function limparTimersAutomaticos() {
+    clearTimeout(intervaloAposFinal);
+    clearTimeout(pararLoopBeep);
+
+    intervaloAposFinal = null;
+    pararLoopBeep = null;
+
+    try {
+        beep.pause();
+        beep.loop = false;
+        beep.currentTime = 0;
+    } catch (e) {}
+}
+
+function finalizarTempo() {
+    rodando = false;
+
+    ativarAlertaFinal();
+    tocarBeepLoopPor3Segundos();
+
+    if (modoAtual === "treino") {
+        intervaloAposFinal = setTimeout(() => {
+            iniciarIntervaloAutomatico();
+        }, 10000);
+    }
+
+    if (modoAtual === "intervalo") {
+        resetarParaTreino();
+    }
+}
+
+function iniciarIntervaloAutomatico() {
+    limparAlertaFinal();
+
+    modoAtual = "intervalo";
+    tempo = TEMPO_INTERVALO;
+    rodando = true;
+    beep10Tocado = false;
+
+    document.body.classList.add("intervalo");
+
+    atualizarTela();
+}
+
+function resetarParaTreino() {
+    limparTimersAutomaticos();
+    limparAlertaFinal();
+
+    modoAtual = "treino";
+    tempo = tempoConfigurado;
+    rodando = false;
+    beep10Tocado = false;
+
+    document.body.classList.remove("intervalo");
+
+    atualizarTela();
+}
+
+function alternarStartPause() {
+    desbloquearAudio();
+
+    if (alertaFinal) {
+        limparTimersAutomaticos();
+        limparAlertaFinal();
+
+        if (modoAtual === "treino") {
+            tempo = tempoConfigurado;
+        }
+
+        if (modoAtual === "intervalo") {
+            resetarParaTreino();
+            return;
+        }
+    }
+
+    rodando = !rodando;
+}
+
+function aumentarTempo() {
+    if (modoAtual !== "treino") return;
+
+    limparTimersAutomaticos();
+    limparAlertaFinal();
+
+    tempoConfigurado += 60;
+    tempo = tempoConfigurado;
+    beep10Tocado = false;
+
+    atualizarTela();
+}
+
+function diminuirTempo() {
+    if (modoAtual !== "treino") return;
+
+    limparTimersAutomaticos();
+    limparAlertaFinal();
+
+    tempoConfigurado = Math.max(60, tempoConfigurado - 60);
+    tempo = tempoConfigurado;
+    beep10Tocado = false;
+
+    atualizarTela();
+}
+
 setInterval(() => {
+    if (!rodando || tempo <= 0) return;
 
-    if (rodando && tempo > 0) {
+    tempo--;
+    atualizarTela();
 
-        tempo--;
-        atualizarTela();
+    if (tempo === 10 && !beep10Tocado) {
+        beep10Tocado = true;
+        tocarBeepUmaVez();
+    }
 
-        if (tempo > 0 && tempo <= 10 && !alertaFinal) {
-            ativarAlertaFinal();
-        }
-
-        if (tempo === 0) {
-            rodando = false;
-        }
+    if (tempo === 0) {
+        finalizarTempo();
     }
 
 }, 1000);
 
-// Controle remoto Samsung
-
-document.addEventListener('keydown', function(e) {
-
+document.addEventListener("keydown", function(e) {
     switch(e.keyCode) {
 
         // ENTER
         case 13:
-            rodando = !rodando;
+            alternarStartPause();
             break;
 
         // SETA CIMA
         case 38:
-            tempo += 60;
-            if (tempo > 10) limparAlertaFinal();
-            atualizarTela();
+            aumentarTempo();
             break;
 
         // SETA BAIXO
         case 40:
-            tempo = Math.max(0, tempo - 60);
-            atualizarTela();
+            diminuirTempo();
             break;
 
         // SETA ESQUERDA
         case 37:
-
-            rodando = false;
-            tempo = TEMPO_INICIAL;
-
-            limparAlertaFinal();
-            atualizarTela();
+            resetarParaTreino();
             break;
     }
 });
 
-atualizarTela();
-atualizarHorario();
+window.onload = function() {
+    atualizarTela();
+    atualizarHorario();
+
+    window.focus();
+    document.body.focus();
+};
+
+setInterval(atualizarHorario, 1000);
